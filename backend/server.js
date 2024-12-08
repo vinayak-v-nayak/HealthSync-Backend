@@ -20,7 +20,7 @@ const port = 3000;
 
 // CORS Configuration
 app.use(cors({
-    origin: 'http://localhost:3001', // Adjust this to your frontend's origin
+    origin: 'http://localhost:5174', // Adjust this to your frontend's origin
     credentials: true // Allow credentials (cookies, etc.)
 }));
 app.use(express.json());
