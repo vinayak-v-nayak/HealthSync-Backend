@@ -19,7 +19,7 @@ const app = express();
 const port = 3000;
 // CORS Configuration
 app.use(cors({
-    origin: 'http://localhost:5173', // Adjust this to your frontend's origin
+    origin: 'https://healthsync-21a49.web.app', // Adjust this to your frontend's origin
     credentials: true // Allow credentials (cookies, etc.)
 }));
 app.use(express.json());
