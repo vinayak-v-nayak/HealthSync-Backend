@@ -13,7 +13,7 @@ const {authenticateUser}= require('../Middleware/authenticateUser');
 const axios = require('axios');
 const { authenticatedToken } = require('../Middleware/authenticatedToken'); // Updated path
 const Feedback = require('./models/feedback');
-
+const Article = require('./models/articles')
 
 const app = express();
 const port = 3000;
