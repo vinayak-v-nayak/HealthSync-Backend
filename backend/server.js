@@ -348,6 +348,16 @@ app.post('/submit-feedback', authenticatedToken, async (req, res) => {
 });
 
 
+app.get('/api/articles', async (req, res) => {
+  try {
+    const articles = await Article.find({}); // Fetch all articles
+    res.json(articles); // Send the articles as a JSON response
+  } catch (error) {
+    console.error('Error fetching articles:', error);
+    res.status(500).json({ error: 'Error fetching articles from the database' });
+  }
+});
+
 
 // Server Listening
 app.listen(port, () => {
