@@ -285,7 +285,7 @@ app.post('/api/user/update-data', authenticate, async (req, res) => {
     };
 
     // Make prediction request to the ML model
-    const predictionResponse = await axios.post('http://127.0.0.1:5000/predict', {
+    const predictionResponse = await axios.post('https://healthsync-ml.onrender.com/predict', {
       features: Object.values(predictionData)
     });
 
@@ -379,7 +379,7 @@ app.get('/api/policies/recommendations', authenticatedToken, async (req, res) =>
     }
 
     // Send fitness score to the model to get recommendations
-    const predictionResponse = await axios.post('http://127.0.0.1:5000/recommend', {
+    const predictionResponse = await axios.post('https://healthsync-ml.onrender.com/recommend', {
       fitness_score: fitnessScore,
       salary:salary // Send the fitness score for model prediction
     });
