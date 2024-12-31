@@ -14,12 +14,15 @@ const axios = require('axios');
 const { authenticatedToken } = require('../Middleware/authenticatedToken'); // Updated path
 const Feedback = require('./models/feedback');
 const Article = require('./models/articles');
+const Admin = require('./models/admin')
+
 
 const app = express();
 const port = 3000;
+
 // CORS Configuration
 app.use(cors({
-    origin: 'https://healthsync-21a49.web.app', // Adjust this to your frontend's origin
+    origin: 'https://healthsyncapp.web.app', // Adjust this to your frontend's origin
     credentials: true // Allow credentials (cookies, etc.)
 }));
 app.use(express.json());
@@ -134,22 +137,62 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-app.get('/api/auth/user', authenticateToken, async (req, res) => {
-  try {
-      const userId = req.user.userId; // Extracted from the token in the middleware
-      const user = await User.findById(userId).select('-password'); // Exclude the password field
+// Profile Route to get user details
+app.get('/api/auth/user', async (req, res) => {
+    const userCookie = req.cookies.user;
 
-      if (!user) {
-          return res.status(404).json({ message: 'User not found' });
-      }
+    if (!userCookie) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
 
-      res.json({ user });
-  } catch (error) {
-      console.error('Error fetching user:', error);
-      res.status(500).json({ message: 'Internal server error' });
-  }
+    try {
+        const userData = JSON.parse(userCookie);
+        const user = await User.findById(userData.id).select('-password'); // Exclude password
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({ user });
+    } catch (error) {
+        console.error("Error parsing user cookie:", error); // Log the error
+        res.status(400).json({ message: 'Invalid cookie' });
+    }
 });
 
+// Update Profile Route to update user details
+app.put('/api/auth/user', async (req, res) => {
+    const userCookie = req.cookies.user;
+
+    if (!userCookie) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    try {
+        const userData = JSON.parse(userCookie);
+        const user = await User.findById(userData.id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const { name, email, address, phoneNumber, job, gender } = req.body;
+
+        // Update user details
+        user.name = name || user.name;
+        user.email = email || user.email;
+        user.address = address || user.address;
+        user.phoneNumber = phoneNumber || user.phoneNumber;
+        user.job = job || user.job;
+        user.gender = gender || user.gender;
+
+        await user.save();
+        res.json({ message: 'Profile updated successfully', user });
+    } catch (error) {
+        console.error("Error updating profile:", error); // Log the error
+        res.status(400).json({ message: 'Invalid cookie or server error' });
+    }
+});
 
 // Update user profile
 app.patch('/api/auth/user/update', authenticateToken, async (req, res) => {
@@ -168,6 +211,45 @@ app.patch('/api/auth/user/update', authenticateToken, async (req, res) => {
         console.error('Error updating user:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
+});
+
+// Route handler to fetch user data
+app.get("/api/user/get-data", authenticateUser, async (req, res) => {
+  const userId = req.userId; 
+
+  if (!userId) {
+    return res.status(400).json({ message: "User ID is required." });
+  }
+
+  try {
+    // Fetch user data from the database
+    const user = await UserData.findOne({ userId });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Only return health-related data to the client
+    const userData = {
+      gender: user.gender || "",
+      age: user.age || "",
+      height: user.height || "",
+      weight: user.weight || "",
+      salary: user.salary || "",
+      diabetes: user.diabetes || false,
+      bloodPressureProblems: user.bloodPressureProblems || false,
+      anyTransplants: user.anyTransplants || false,
+      anyChronicDiseases: user.anyChronicDiseases || false,
+      knownAllergies: user.knownAllergies || false,
+      historyOfCancerInFamily: user.historyOfCancerInFamily || false,
+      numberOfMajorSurgeries: user.numberOfMajorSurgeries || 0,
+    };
+
+    res.status(200).json(userData);
+  } catch (error) {
+    console.error("Error fetching user data:", error);
+    res.status(500).json({ message: "An error occurred while fetching user data." });
+  }
 });
 
 
@@ -203,7 +285,7 @@ app.post('/api/user/update-data', authenticate, async (req, res) => {
     };
 
     // Make prediction request to the ML model
-    const predictionResponse = await axios.post('https://healthsync-ml.onrender.com/predict', {
+    const predictionResponse = await axios.post('http://127.0.0.1:5000/predict', {
       features: Object.values(predictionData)
     });
 
@@ -297,7 +379,7 @@ app.get('/api/policies/recommendations', authenticatedToken, async (req, res) =>
     }
 
     // Send fitness score to the model to get recommendations
-    const predictionResponse = await axios.post('https://healthsync-ml.onrender.com/recommend', {
+    const predictionResponse = await axios.post('http://127.0.0.1:5000/recommend', {
       fitness_score: fitnessScore,
       salary:salary // Send the fitness score for model prediction
     });
@@ -347,7 +429,6 @@ app.post('/submit-feedback', authenticatedToken, async (req, res) => {
   }
 });
 
-
 app.get('/api/articles', async (req, res) => {
   try {
     const articles = await Article.find({}); // Fetch all articles
@@ -355,6 +436,51 @@ app.get('/api/articles', async (req, res) => {
   } catch (error) {
     console.error('Error fetching articles:', error);
     res.status(500).json({ error: 'Error fetching articles from the database' });
+  }
+});
+
+app.post('/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    // Check if the user exists
+    const user = await Admin.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Compare the password
+    if (user.password !== password) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ id: user._id, role: 'admin' }, process.env.JWT_SECRET || 'My-secret-key');
+
+    return res.status(200).json({ message: 'Login successful', token });
+  } catch (error) {
+    return res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+app.get('/admin/users', async (req, res) => {
+  try {
+    const users = await User.find({}, 'name email createdAt'); // Fetch required fields
+    res.status(200).json(users);
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
+
+app.get('/admin/feedbacks', async (req, res) => {
+  try {
+    const feedbacks = await Feedback.find({}).populate('userId', 'name email').select('userId feedback rating created_at'); // Populate user info and select required fields
+    res.status(200).json(feedbacks);
+  } catch (err) {
+    console.error('Error fetching feedbacks:', err);
+    res.status(500).json({ message: 'Internal server error.' });
   }
 });
 
