@@ -137,62 +137,23 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+
 // Profile Route to get user details
-app.get('/api/auth/user', async (req, res) => {
-    const userCookie = req.cookies.user;
+app.get('/api/auth/user', authenticateToken, async (req, res) => {
+  try {
+      const userId = req.user.userId;
+      const user = await User.findById(userId).select('-password'); // Exclude the password field
 
-    if (!userCookie) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
+      if (!user) {
+          return res.status(404).json({ message: 'User not found' });
+      }
 
-    try {
-        const userData = JSON.parse(userCookie);
-        const user = await User.findById(userData.id).select('-password'); // Exclude password
-
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        res.json({ user });
-    } catch (error) {
-        console.error("Error parsing user cookie:", error); // Log the error
-        res.status(400).json({ message: 'Invalid cookie' });
+      res.json({ user });
+  } catch (error) {
+      console.error('Error fetching user:', error);
     }
 });
 
-// Update Profile Route to update user details
-app.put('/api/auth/user', async (req, res) => {
-    const userCookie = req.cookies.user;
-
-    if (!userCookie) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    try {
-        const userData = JSON.parse(userCookie);
-        const user = await User.findById(userData.id);
-
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        const { name, email, address, phoneNumber, job, gender } = req.body;
-
-        // Update user details
-        user.name = name || user.name;
-        user.email = email || user.email;
-        user.address = address || user.address;
-        user.phoneNumber = phoneNumber || user.phoneNumber;
-        user.job = job || user.job;
-        user.gender = gender || user.gender;
-
-        await user.save();
-        res.json({ message: 'Profile updated successfully', user });
-    } catch (error) {
-        console.error("Error updating profile:", error); // Log the error
-        res.status(400).json({ message: 'Invalid cookie or server error' });
-    }
-});
 
 // Update user profile
 app.patch('/api/auth/user/update', authenticateToken, async (req, res) => {
