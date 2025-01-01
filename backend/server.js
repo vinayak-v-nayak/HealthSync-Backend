@@ -22,7 +22,7 @@ const port = 3000;
 
 // CORS Configuration
 app.use(cors({
-    origin: 'https://healthsyncapp.web.app', // Adjust this to your frontend's origin
+    origin: 'https://healthsync-21a49.web.app', // Adjust this to your frontend's origin
     credentials: true // Allow credentials (cookies, etc.)
 }));
 app.use(express.json());
@@ -246,7 +246,7 @@ app.post('/api/user/update-data', authenticate, async (req, res) => {
     };
 
     // Make prediction request to the ML model
-    const predictionResponse = await axios.post('https://healthsync-ml-1.onrender.com/predict', {
+    const predictionResponse = await axios.post('healthsync-backend.railway.internal/predict', {
       features: Object.values(predictionData)
     });
 
@@ -340,7 +340,7 @@ app.get('/api/policies/recommendations', authenticatedToken, async (req, res) =>
     }
 
     // Send fitness score to the model to get recommendations
-    const predictionResponse = await axios.post('https://healthsync-ml-1.onrender.com/recommend', {
+    const predictionResponse = await axios.post('healthsync-backend.railway.internal/recommend', {
       fitness_score: fitnessScore,
       salary:salary // Send the fitness score for model prediction
     });
