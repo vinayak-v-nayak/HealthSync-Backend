@@ -246,7 +246,7 @@ app.post('/api/user/update-data', authenticate, async (req, res) => {
     };
 
     // Make prediction request to the ML model
-    const predictionResponse = await axios.post('https://healthsync-backend.railway.internal/predict', {
+    const predictionResponse = await axios.post('https://healthsync-ml-production.up.railway.app/predict', {
       features: Object.values(predictionData)
     });
 
@@ -340,7 +340,7 @@ app.get('/api/policies/recommendations', authenticatedToken, async (req, res) =>
     }
 
     // Send fitness score to the model to get recommendations
-    const predictionResponse = await axios.post('https://healthsync-backend.railway.internal/recommend', {
+    const predictionResponse = await axios.post('https://healthsync-ml-production.up.railway.app/recommend', {
       fitness_score: fitnessScore,
       salary:salary // Send the fitness score for model prediction
     });
