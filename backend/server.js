@@ -22,7 +22,7 @@ const port = 3000;
 
 // CORS Configuration
 app.use(cors({
-    origin: 'https://healthsync-21a49.web.app', // Adjust this to your frontend's origin
+    origin: 'http://localhost:3001', // Adjust this to your frontend's origin
     credentials: true // Allow credentials (cookies, etc.)
 }));
 app.use(express.json());
@@ -105,36 +105,46 @@ app.post('/api/auth/signup', async (req, res) => {
 
 // Login route to authenticate user and set cookie
 app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-        // Check if user exists
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
-
-        // Validate password
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
-
-        // Generate JWT
-        const token = jwt.sign(
-            { userId: user._id },
-            process.env.JWT_SECRET || 'My-secret-key'
-        );
-
-        // Set cookie with user data (without password)
-        res.cookie('user', JSON.stringify({ id: user._id, name: user.name, email: user.email }), { 
-            httpOnly: true, 
-            maxAge: 86400000 // 1 day
-        });
-        res.json({ token });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
+
+    // If password is not set, ask to set a new one
+    if (user.password=="null") {
+      return res.status(403).json({
+        message: 'Password not set. Please create a new password.',
+        requirePasswordReset: true,
+        email: user.email
+      });
+    }
+
+    // Validate password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate JWT
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET || 'My-secret-key'
+    );
+
+    // Set cookie with user data (without password)
+    res.cookie('user', JSON.stringify({ id: user._id, name: user.name, email: user.email }), { 
+      httpOnly: true, 
+    });
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 
@@ -153,7 +163,6 @@ app.get('/api/auth/user', authenticateToken, async (req, res) => {
       console.error('Error fetching user:', error);
     }
 });
-
 
 // Update user profile
 app.patch('/api/auth/user/update', authenticateToken, async (req, res) => {
@@ -246,7 +255,7 @@ app.post('/api/user/update-data', authenticate, async (req, res) => {
     };
 
     // Make prediction request to the ML model
-    const predictionResponse = await axios.post('https://healthsync-ml-production.up.railway.app/predict', {
+    const predictionResponse = await axios.post('http://127.0.0.1:5000/predict', {
       features: Object.values(predictionData)
     });
 
@@ -340,7 +349,7 @@ app.get('/api/policies/recommendations', authenticatedToken, async (req, res) =>
     }
 
     // Send fitness score to the model to get recommendations
-    const predictionResponse = await axios.post('https://healthsync-ml-production.up.railway.app/recommend', {
+    const predictionResponse = await axios.post('http://127.0.0.1:5000/recommend', {
       fitness_score: fitnessScore,
       salary:salary // Send the fitness score for model prediction
     });
@@ -414,7 +423,7 @@ app.post('/admin/login', async (req, res) => {
     if (user.password !== password) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-
+    
     // Generate JWT token
     const token = jwt.sign({ id: user._id, role: 'admin' }, process.env.JWT_SECRET || 'My-secret-key');
 
@@ -426,7 +435,7 @@ app.post('/admin/login', async (req, res) => {
 
 app.get('/admin/users', async (req, res) => {
   try {
-    const users = await User.find({}, 'name email createdAt'); // Fetch required fields
+    const users = await User.find({}, 'name email job phone address createdAt'); // Fetch required fields
     res.status(200).json(users);
   } catch (err) {
     console.error('Error fetching users:', err);
@@ -444,6 +453,83 @@ app.get('/admin/feedbacks', async (req, res) => {
     res.status(500).json({ message: 'Internal server error.' });
   }
 });
+
+// DELETE /admin/users/:email
+app.delete('/admin/users/:email', async (req, res) => {
+  const { email } = req.params;
+  try {
+    const deletedUser = await User.findOneAndDelete({ email });
+    if (!deletedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /admin/users/:email/reset-password
+app.post('/admin/users/:email/reset-password', async (req, res) => {
+  const { email } = req.params;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    user.password = "null"; // or '' depending on your schema validation
+    await user.save();
+
+    // Optionally: trigger email with reset link/token here
+
+    res.status(200).json({ message: 'Password reset successfully' });
+  } catch (err) {
+    console.error('Error resetting password:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+app.post('/user/change-password', async (req, res) => {
+  const { email, oldPassword, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const passwordMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!passwordMatch) return res.status(401).json({ message: 'Incorrect current password' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Password change error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/user/set-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.password = hashed;
+    await user.save();
+
+    res.status(200).json({ message: 'Password has been set. You can now login.' });
+  } catch (error) {
+    console.error('Set password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 
 // Server Listening
